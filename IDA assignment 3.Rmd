@@ -1,0 +1,286 @@
+---
+title: "Assignment 3"
+author:
+- Li Yang - s2022270@ed.ac.uk
+institution:  "University of Edinburgh"
+
+output:
+  pdf_document: default
+---
+"https://github.com/yangli0525/IDA-assignment-3"
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("mice")
+install.packages("JointAI")
+install.packages("ggplot2")
+library(ggplot2)
+library(mice)
+require(JointAI)
+```
+
+# Task 1
+
+(a)
+```{r}
+par(mar = c(3, 3, 2, 1), mgp = c(2, 0.6, 0))
+plot_all(nhanes, breaks = 10, ncol = 4)
+```
+The percentages of missing values for each variables are shown in the plot above.
+
+```{r}
+nrow(cc(nhanes))
+nrow(nhanes)
+```
+From the output above, we could find that there are 13 complete cases and the total number of cases is 25. Therefore, the percentage of the cases is complete is $\frac{25-13}{25}$ = 48%.
+
+(b) Impute the data with mice using the defaults with seed=1.
+```{r}
+imps <- mice(nhanes, printFlag = FALSE, seed = 1)
+imps
+```
+Now proceed to step 2, predict bmi from age, hyp, and chl by the normal linear regression model. And the corresponding summary of the first imputed dataset is shown below.
+```{r}
+fits <- with(imps, lm(bmi ~ age + hyp + chl))
+```
+Then pool the results.
+```{r}
+ests <- pool(fits)
+ests
+```
+The proportions of variance due to the missing data for intercept, age, hyp and chl are 0.08938989, 0.68640637, 0.35043452 and 0.30408063. 
+
+Age appear to be most affected by the nonresponse, according to b and lambda. Larger value of B means larger variability in the estimates between imputed datasets.
+
+(c)
+```{r}
+ests2 <- pool(with(mice(nhanes, printFlag = FALSE, seed = 2), lm(bmi ~ age + hyp + chl)))
+ests3 <- pool(with(mice(nhanes, printFlag = FALSE, seed = 3), lm(bmi ~ age + hyp + chl)))
+ests4 <- pool(with(mice(nhanes, printFlag = FALSE, seed = 4), lm(bmi ~ age + hyp + chl)))
+ests5 <- pool(with(mice(nhanes, printFlag = FALSE, seed = 5), lm(bmi ~ age + hyp + chl)))
+ests6 <- pool(with(mice(nhanes, printFlag = FALSE, seed = 6), lm(bmi ~ age + hyp + chl)))
+```
+```{r}
+summary(ests2, conf.int = TRUE)
+summary(ests3, conf.int = TRUE)
+summary(ests4, conf.int = TRUE)
+summary(ests5, conf.int = TRUE)
+summary(ests6, conf.int = TRUE)
+```
+The conclusions  are almost the same.
+
+(d)
+```{r}
+ests_100 <- pool(with(mice(nhanes, printFlag = FALSE,m = 100, seed = 1), lm(bmi ~ age + hyp + chl)))
+ests
+ests_100
+```
+I would prefer the analyses with M=100, since the pooled estimates, standard errors, and the bounds of the intervals get more stable as M increases and the results will with high probability only differ by a small amount.
+
+# Task 2
+```{r}
+load('dataex2.Rdata')
+```
+```{r}
+emp_sri <- 0
+for (i in 1:100){
+  imp_sri <- mice(dataex2[,,i], m = 20, seed = 1, method = "norm.nob", printFlag = FALSE)
+  fits_sri <- with(imp_sri, lm(Y ~ X))
+  ests_sri <- pool(fits_sri)
+  sum_sri <- summary(ests_sri, conf.int = TRUE)
+  lq_sri = sum_sri[2,7]
+  uq_sri = sum_sri[2,8]
+  if (lq_sri <= 3 & uq_sri >= 3){
+    emp_sri = emp_sri + 1}
+} 
+
+emp_sri/100
+```
+
+For stochastic regression imputation, the empirical coverage probability is 0.88, which means that 88% intervals contain the true value of $\beta_{1}$.
+
+```{r}
+emp_boot <- 0
+for (i in 1:100){
+  imp_boot <- mice(dataex2[,,i], m = 20, seed = 1, method = "norm.boot", printFlag = FALSE)
+  fits_boot <- with(imp_boot, lm(Y ~ X))
+  ests_boot <- pool(fits_boot)
+  sum_boot <- summary(ests_boot, conf.int = TRUE)
+  lq_boot = sum_boot[2,7]
+  uq_boot = sum_boot[2,8]
+  if (lq_boot <= 3 & uq_boot >= 3){
+    emp_boot = emp_boot + 1}
+}
+
+
+emp_boot/100
+```
+For the corresponding bootstrap based version, the empirical coverage probability is 0.95, which is larger than stochastic regression imputation. It means that 95% intervals contain the true value of $\beta_{1}$. Therefore, the corresponding bootstrap based version is better than stochastic regression imputation.
+
+
+# Task 3
+Assume the model is $y_{i}$ = $\beta_{0} + \beta_{1}x_{1i} + \beta_{2}x_{2i} + ... + \epsilon_{i}$.
+
+After generating multiple completed datasets and applying the statistical model of interest to each completed dataset, we could get M estimates.
+
+Strategy (i):
+
+(a) Computing the predicted values from each fitted model, we could get M $\widehat{y_{i}}$, $\widehat{y_{i}^{1}} = \widehat{\beta_{0}^{1}} + \widehat{\beta_{1}^{1}}x_{1i} + \widehat{\beta_{2}^{1}}x_{2i} + ...$.
+
+(b) Pooling them according to Rubin's rule, we coulde get
+
+$\widehat{y_{i}} = (\widehat{y_{i}^{1}} + \widehat{y_{i}^{2}} +...+ \widehat{y_{i}^{M}})/M$
+
+$= [(\widehat{\beta_{0}^{1}} + \widehat{\beta_{1}^{1}}x_{1i} + \widehat{\beta_{2}^{1}}x_{2i} +...)+ (\widehat{\beta_{0}^{2}} + \widehat{\beta_{1}^{2}}x_{1i} + \widehat{\beta_{2}^{2}}x_{2i} +...) +...+  (\widehat{\beta_{0}^{M}} + \widehat{\beta_{1}^{M}}x_{1i} + \widehat{\beta_{2}^{M}}x_{2i} + ...)]/M$
+
+$= (\widehat{\beta_{0}^{1}} + \widehat{\beta_{0}^{2}} +...+ \widehat{\beta_{0}^{M}})/M + (\widehat{\beta_{1}^{1}} + \widehat{\beta_{1}^{2}} +...+ \widehat{\beta_{1}^{M}})*x_{1i}/M + (\widehat{\beta_{2}^{1}} + \widehat{\beta_{2}^{2}} +...+ \widehat{\beta_{2}^{M}})*x_{2i}/M  + ...$
+
+$= \widehat{\beta_{0}} + \widehat{\beta_{1}}x_{1i} + \widehat{\beta_{2}}x_{2i} + ...$,
+
+where $\widehat{\beta_{0}} = \widehat{\beta_{0}^{1}} + \widehat{\beta_{0}^{2}} +...+ \widehat{\beta_{0}^{M}}$,
+$\widehat{\beta_{1}} = \widehat{\beta_{1}^{1}} + \widehat{\beta_{1}^{2}} +...+ \widehat{\beta_{1}^{M}}$ and so on.
+
+Strategy (ii):
+
+(a) Pooling the regression coefficients from each fitted model using Rubin's rule, we can get 
+
+$\widehat{\beta_{0}} = \widehat{\beta_{0}^{1}} + \widehat{\beta_{0}^{2}} +...+ \widehat{\beta_{0}^{M}}$,
+$\widehat{\beta_{1}} = \widehat{\beta_{1}^{1}} + \widehat{\beta_{1}^{2}} +...+ \widehat{\beta_{1}^{M}}$ and so on.
+
+(b) Then compute the predicted values.
+
+$\widehat{y_{i}} = \widehat{\beta_{0}} + \widehat{\beta_{1}}x_{1i} + \widehat{\beta_{2}}x_{2i} + ...$, which is the same as former one.
+
+Therefore, the two strategies coincide.
+
+# Task 4
+
+(a)
+```{r}
+load("dataex4.Rdata")
+```
+
+```{r}
+imps <- mice(dataex4, m = 50, seed = 1, printFlag = FALSE)
+fits <- with(imps, lm(y ~ x1 + x2 + x1*x2))
+ests <- pool(fits)
+summary <- summary(ests, conf.int = TRUE)
+df <- data.frame("Estimate" = summary[,2],
+"lq" = summary[,7],
+"uq" = summary[,8]
+)
+rownames(df) <- c("$\\beta_0$", "$\\beta_1$","$\\beta_2$", "$\\beta_3$")
+colnames(df) <- c("Estimate", "2.5% quantile", "97.5% quantile")
+knitr::kable(df, escape = FALSE, digits = 3,
+caption = "Regression coefficient estimates and corresponding 95% CI")
+```
+The pooled regression coefficient estimates and corresponding 95% confidence intervals are given in above table. For $\beta_0$ and $\beta_2$, the estimates is quite good since the true value is contained in 95% confidence interval. However, for $\beta_1$ and $\beta_3$, it has to be improved. The confidence intervals for $\beta_1$ and $\beta_3$ are (1.219,1.603) and (0.642,0.868), which does not contain the true value of $\beta_1$ and $\beta_3$.
+
+(b)
+```{r}
+dataex4$x1x2 <- dataex4$x1*dataex4$x2 
+```
+
+```{r}
+imp_b <- mice(dataex4, m = 50, seed = 1, printFlag = FALSE)
+meth <- imp_b$method
+meth["x1x2"] <- "~I(x1*x2)"
+imp_b <- mice(dataex4, m = 50, seed = 1, method = meth, printFlag = FALSE)
+fits_b <- with(imp_b, lm(y ~ x1 + x2 + x1x2))
+ests_b <- pool(fits_b)
+summary_b <- summary(ests_b, conf.int = TRUE)
+df <- data.frame("Estimate" = summary_b[,2],
+"lq" = summary_b[,7],
+"uq" = summary_b[,8]
+)
+rownames(df) <- c("$\\beta_0$", "$\\beta_1$","$\\beta_2$", "$\\beta_3$")
+colnames(df) <- c("Estimate", "2.5% quantile", "97.5% quantile")
+knitr::kable(df, escape = FALSE, digits = 3,
+caption = "Regression coefficient estimates and corresponding 95% CI")
+```
+
+Using passive imputation, the pooled regression coefficient estimates and corresponding 95% confidence intervals are given in above table. For $\beta_0$ and $\beta_2$, the estimates is quite good since the true value is contained in 95% confidence interval. However, for $\beta_1$ and $\beta_3$, it has to be improved. The confidence intervals for $\beta_1$ and $\beta_3$ are (1.071,1.460) and (0.687,0.918), which does not contain the true value of $\beta_1$ and $\beta_3$. But it is nearer to the true value than the estimates in question a.
+
+(c)
+```{r}
+imp_c <- mice(dataex4, m = 50, seed = 1, printFlag = FALSE)
+fits_c <- with(imp_c, lm(y ~ x1 + x2 + x1x2))
+ests_c <- pool(fits_c)
+summary_c <- summary(ests_c, conf.int = TRUE)
+df <- data.frame("Estimate" = summary_c[,2],
+"lq" = summary_c[,7],
+"uq" = summary_c[,8]
+)
+rownames(df) <- c("$\\beta_0$", "$\\beta_1$","$\\beta_2$", "$\\beta_3$")
+colnames(df) <- c("Estimate", "2.5% quantile", "97.5% quantile")
+knitr::kable(df, escape = FALSE, digits = 3,
+caption = "Regression coefficient estimates and corresponding 95% CI")
+```
+By imputing $x_{1}x_{2}$ as another variable, the pooled regression coefficient estimates and corresponding 95% confidence intervals are given in above table. For all of the cofficients, the estimates is quite good since the true values are contained in 95% confidence intervals. Therefore, it is the best imputaion so far.
+
+(d)
+The most obvious conceptual drawback is the varable x1x2 is not equal to x1*x2 sometimes, which is not conform to model.
+
+# Task 5
+```{r results='hide', echo=FALSE}
+load("NHANES2.Rdata")
+```
+
+```{r}
+dim(NHANES2)
+str(NHANES2)
+summary(NHANES2)
+```
+We have 500 individuals in our dataset, and some variables have some missing values.
+
+Let us now further inspect the missing data patterns.
+```{r}
+mdp <- md_pattern(NHANES2, pattern = TRUE)
+mdp$plot
+```
+From the above plot we can see that there are 411 individuals with no missing values in any of the variables and 10 who have missing values in waist circumference but do not have missing values in any of the other variables.
+
+Now visualize how the distribution of the observed values in the different variables look like.
+```{r}
+par(mar = c(3, 3, 2, 1), mgp = c(2, 0.6, 0))
+plot_all(NHANES2, breaks = 30, ncol = 4)
+```
+We can see that the distributions of the continuous variables are quite skewed except hgt, and so predictive mean matching is the best option.
+
+Now we proceed to the imputation step.
+```{r}
+imp_5 <- mice(NHANES2, m = 30, seed = 1, printFlag = FALSE)
+imp_5$loggedEvents
+```
+We could use loggedEvents to check whether there is any problem during the imputation. The result is obviously no any problem.
+
+Now look at the chains of the imputed values to check whether there are convergence problems.
+```{r}
+plot(imp_5, layout = c(4,4))
+```
+Because education has only one missing value, there is no variation and the standard deviation plot is in blank. All seems good in what regards convergence of the chains of the different variables.
+
+Now inspect if the distribution of the imputed values agrees with the distribution of the observed ones.
+```{r}
+densityplot(imp_5)
+```
+```{r}
+densityplot(imp_5, ~hgt|gender)
+```
+Having confirmed that our imputation step was successful, we can fit the model of interest.
+```{r}
+fits_5 <- with(imp_5, lm(wgt ~ gender + age + hgt + WC))
+ests_5 <- pool(fits_5)
+summary <- summary(ests_5, conf.int = TRUE)
+summary
+df <- data.frame("Estimate" = summary[,2],
+"lq" = summary[,7],
+"uq" = summary[,8]
+)
+rownames(df) <- c("$\\beta_0$", "$\\beta_1$","$\\beta_2$", "$\\beta_3$", "$\\beta_4$")
+colnames(df) <- c("Estimate", "2.5% quantile", "97.5% quantile")
+knitr::kable(df, escape = FALSE, digits = 3,
+caption = "Regression coefficient estimates and corresponding 95% CI")
+
+```
+The pooled regression coefficient estimates and corresponding 95% confidence intervals are given in above table. Therefore, we could get the estimates of the coefficients are $\beta_0$ = -101.457, $\beta_1$ = -1.330, $\beta_2$ = -0.158, $\beta_3$ = 52.770, $\beta_4$ = 1.026,
+
