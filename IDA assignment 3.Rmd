@@ -173,6 +173,12 @@ colnames(df) <- c("Estimate", "2.5% quantile", "97.5% quantile")
 knitr::kable(df, escape = FALSE, digits = 3,
 caption = "Regression coefficient estimates and corresponding 95% CI")
 ```
+The estimates of $\beta_1$ is 1.411, and teh 95% confidence interval is (1.219,1.603).
+
+The estimates of $\beta_2$ is 1.966, and teh 95% confidence interval is (1.861,2.071).
+
+The estimates of $\beta_3$ is 1.411, and teh 95% confidence interval is (0.642,0.868).
+
 The pooled regression coefficient estimates and corresponding 95% confidence intervals are given in above table. For $\beta_0$ and $\beta_2$, the estimates is quite good since the true value is contained in 95% confidence interval. However, for $\beta_1$ and $\beta_3$, it has to be improved. The confidence intervals for $\beta_1$ and $\beta_3$ are (1.219,1.603) and (0.642,0.868), which does not contain the true value of $\beta_1$ and $\beta_3$.
 
 (b)
@@ -184,7 +190,12 @@ dataex4$x1x2 <- dataex4$x1*dataex4$x2
 imp_b <- mice(dataex4, m = 50, seed = 1, printFlag = FALSE)
 meth <- imp_b$method
 meth["x1x2"] <- "~I(x1*x2)"
-imp_b <- mice(dataex4, m = 50, seed = 1, method = meth, printFlag = FALSE)
+pred = imp_b$predictorMatrix
+pred[c("x1","x2"),"x1x2"] = 0
+pred[,c("x1","x2")] = 0
+pred["x1","x2"] = 1
+pred["x2","x1"] = 1
+imp_b <- mice(dataex4, m = 50, seed = 1, method = meth, predictorMatrix = pred, printFlag = FALSE)
 fits_b <- with(imp_b, lm(y ~ x1 + x2 + x1x2))
 ests_b <- pool(fits_b)
 summary_b <- summary(ests_b, conf.int = TRUE)
@@ -197,8 +208,13 @@ colnames(df) <- c("Estimate", "2.5% quantile", "97.5% quantile")
 knitr::kable(df, escape = FALSE, digits = 3,
 caption = "Regression coefficient estimates and corresponding 95% CI")
 ```
+The estimates of $\beta_1$ is 0.976, and teh 95% confidence interval is (0.699,1.253).
 
-Using passive imputation, the pooled regression coefficient estimates and corresponding 95% confidence intervals are given in above table. For $\beta_0$ and $\beta_2$, the estimates is quite good since the true value is contained in 95% confidence interval. However, for $\beta_1$ and $\beta_3$, it has to be improved. The confidence intervals for $\beta_1$ and $\beta_3$ are (1.071,1.460) and (0.687,0.918), which does not contain the true value of $\beta_1$ and $\beta_3$. But it is nearer to the true value than the estimates in question a.
+The estimates of $\beta_2$ is 1.617, and teh 95% confidence interval is (1.469,1.765).
+
+The estimates of $\beta_3$ is 0.947, and teh 95% confidence interval is (0.800,1.094).
+
+As x1x2 will not be used as the predictor, we would like to change the predictor matrix as above. Using passive imputation, the pooled regression coefficient estimates and corresponding 95% confidence intervals are given in above table. For $\beta_0$, $\beta_1$ and $\beta_3$, the estimates is quite good since the true value is contained in 95% confidence interval. However, for $\beta_2$, it has to be improved. The confidence intervals for $\beta_2$ is (1.469,1.765), which does not contain the true value of $\beta_2$. But it is nearer to the true value than the estimates in question a.
 
 (c)
 ```{r}
@@ -215,7 +231,13 @@ colnames(df) <- c("Estimate", "2.5% quantile", "97.5% quantile")
 knitr::kable(df, escape = FALSE, digits = 3,
 caption = "Regression coefficient estimates and corresponding 95% CI")
 ```
-By imputing $x_{1}x_{2}$ as another variable, the pooled regression coefficient estimates and corresponding 95% confidence intervals are given in above table. For all of the cofficients, the estimates is quite good since the true values are contained in 95% confidence intervals. Therefore, it is the best imputaion so far.
+The estimates of $\beta_1$ is 1.004, and teh 95% confidence interval is (0.841,1.166).
+
+The estimates of $\beta_2$ is 2.026, and teh 95% confidence interval is (1.940,2.113).
+
+The estimates of $\beta_3$ is 1.018, and teh 95% confidence interval is (0.930,1.105).
+
+By imputing $x_{1}x_{2}$ as another variable, the pooled regression coefficient estimates and corresponding 95% confidence intervals are given in above table. For all of the cofficients, the estimates is quite good since the true values are contained in 95% confidence intervals. Therefore, it is the best imputation so far.
 
 (d)
 The most obvious conceptual drawback is the varable x1x2 is not equal to x1*x2 sometimes, which is not conform to model.
@@ -264,11 +286,19 @@ Now inspect if the distribution of the imputed values agrees with the distributi
 densityplot(imp_5)
 ```
 ```{r}
-densityplot(imp_5, ~hgt|gender)
+densityplot(imp_5)
 ```
+
 Having confirmed that our imputation step was successful, we can fit the model of interest.
 ```{r}
 fits_5 <- with(imp_5, lm(wgt ~ gender + age + hgt + WC))
+```
+```{r}
+qqnorm(rstandard(fits_5$analyses[[1]]), xlim = c(-4, 4), ylim = c(-6, 6))
+qqline(rstandard(fits_5$analyses[[1]]), col = 2)
+```
+By looking at teh QQplot, there is nothing suapicious. So we can pool the results.
+```{r}
 ests_5 <- pool(fits_5)
 summary <- summary(ests_5, conf.int = TRUE)
 summary
